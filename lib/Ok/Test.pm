@@ -1,12 +1,11 @@
 package Ok::Test;
 
-use 5.006;
 use strict;
-use warnings FATAL => 'all';
+use warnings;
 
 =head1 NAME
 
-Ok::Test - The great new Ok::Test!
+Ok::Test - Simple XUnit framework using annotations!
 
 =head1 VERSION
 
@@ -16,22 +15,48 @@ Version 0.01
 
 our $VERSION = '0.01';
 
+use Attribute::Handlers;
+
+use Exporter qw(import);
+
+our @EXPORT_OK = qw(run_tests);
 
 =head1 SYNOPSIS
 
-Quick summary of what the module does.
+Contains the Annotation handler and static functions for running tests.
 
 Perhaps a little code snippet.
 
     use Ok::Test;
 
-    my $foo = Ok::Test->new();
-    ...
+    use SomeClass::Containing::Annotations;
+    
+    run_tests();
+    
+    or run_test({
+      
+      reporter => $customReporter,
+      filter   => [list_of_full_method_names or file_names]
+    } )
+    
+=head2 Tests
+
+When writing a test class the requirements are this file. Recommended is the Test::Assert library for making testing easier.
+Ok::Test will run each method that is labeled with the : Test annotation as a separate test.
+It will check to see if the containing class contains a new method and will attempt to instanciate the class using this method.
+If no new method exist i.e. Class->can('new') is false, then the class will simply be a blessed hash.
+
+Before if a set_up method exists it will be called before the test and consequently a tear_down method will be called after, if it exists.
+
 
 =head1 EXPORT
 
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
+=over 2
+
+  run_tests
+  get_tests
+
+=back
 
 =head1 SUBROUTINES/METHODS
 
@@ -39,28 +64,97 @@ if you don't export anything, such as for a purely object-oriented module.
 
 =cut
 
-sub function1 {
+=head 2 Annotation Test
+  
+  a function that will be run in the test runner
+  
+=cut
+my %TESTS     = ();
+my @PASSES    = ();
+my @FAILURES  = ();
+my @ERRORS    = ();
+
+sub UNIVERSAL::Test : ATTR(CODE) {
+  my ($package, $symbol, $referent, $attr, $data, $phase, $filename, $linenum) = @_;
+
+  my $method = *{$symbol}{NAME};
+  my $full_name = $package . "::" . $method;
+    
+  $TESTS{$full_name} = {
+    has_new       => $package->can('new') ? 1 : 0,
+    has_set_up    => $package->can('set_up') ? 1 : 0,
+    has_tear_down => $package->can('set_up') ? 1 : 0,
+    "package"     => $package, 
+    method        => $method,
+    filename      => $filename
+  };
+            
 }
 
-=head2 function2
 
-=cut
+sub _get_object {
+  my $method_path = shift;
+  
+  return unless exists $TESTS{$method_path};
+  
+  my $package = $TESTS{$method_path}->{'package'};
+  return $package->new if $TESTS{$method_path}->{has_new};
+  
+  return bless {}, $package;
+}
 
-sub function2 {
+sub run_tests {
+  for my $method_path (keys(%TESTS)) {
+    my $obj;
+    my $error;
+    my $package = $TESTS{$method_path}->{"package"}; 
+    my $method = $TESTS{$method_path}->{method};
+    eval{ $obj = _get_object($method_path); };
+    $error = $@;
+    if($error) {
+      $TESTS{$method_path}->{result} = "Error in constructing object: $error";
+      next;
+    }
+    elsif(!$obj){
+      $TESTS{$method_path}->{result} = "Error in constructing object.";
+    }
+    if(!$error) {
+      eval { $obj->set_up() if $TESTS{$method_path}->{has_set_up}; };
+      $error = $@;
+      if($error) {
+        $TESTS{$method_path}->{result} = "Error in setup: $error";
+      }
+      if(!$error) {
+        eval { $obj->$method(); };
+        $error = $@;
+        if($error) {
+          if( $error->isa('Exception::Assertion') ){
+            my $details = $error->caller_stack;
+            my $location = ();
+            for(my $x = 0; $x < scalar(@$details); $x++) {
+              $location = $details->[$x] if $details->[$x]->[0] eq $package;
+            }
+            my $message = join(" ", "'" . ($error->message ? $error->message : $error->reason) . "' at line: " . $location->[2], "in package: " . $package. "::" . $method . "()", "file: " . $location->[1] . "");
+            $TESTS{$method_path}->{result} = "Failure: " .  $message;
+          }
+          else {
+            $TESTS{$method_path}->{result} = "Error in test: " . $error;
+          }
+        }
+      }
+    }
+    eval { $obj->tear_down } if $TESTS{$method_path}->{has_tear_down};
+  }
+}
+
+sub get_tests {
+  my  %tests = %TESTS;
+  return {%tests};
 }
 
 =head1 AUTHOR
 
 Craig Buchanan, C<< <ok_test at objekt-kontor.de> >>
-
-=head1 BUGS
-
-Please report any bugs or feature requests to C<bug-ok-test at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Ok-Test>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
-
-
-
 
 =head1 SUPPORT
 
