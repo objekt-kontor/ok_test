@@ -1,31 +1,60 @@
 package Ok::SampleTest;
 
-use Ok::Test 'run_tests';
+use Ok::Test;
 
 use Test::Assert ':assert';
 
 sub new {
   my $class = shift;
   
-  print "\nnew called\n";
   return bless {}, $class; 
 }
 
 sub set_up {
-  print "\nset_up called\n";
 }
 
 sub tear_down{
-  print "\ntear_down called\n";
 }
 
-sub something : Test {
-  print "\ntest 'something' called\n";
-  assert_true(0, "test 0 is true");
+sub pass : Test {
+  assert_true(1, "a message");
 }
 
-run_tests();
+sub error : Test {
+  die "random error";
+}
 
-my $tests = Ok::Test::get_tests();
+sub failure : Test {
+  assert_false(1, "another message");
+}
 
-print $tests->{'Ok::SampleTest::something'}->{result};
+sub perl_sigterm : Test {
+  `killall perl;`;
+}
+
+package HasConstructError;
+
+sub new {
+  die 'Arrrgghhh';
+}
+
+sub dies_on_construction : Test{}
+
+package ReturnsNothingFromConstructor;
+
+sub new {
+  return;
+}
+
+sub returns_nothing_from_new : Test {}
+
+package DiesInSetup;
+
+sub set_up {
+  die "set_up to die";
+}
+
+sub dies_in_set_up : Test;
+
+Ok::Test::run_tests();
+
