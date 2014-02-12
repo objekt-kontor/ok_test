@@ -15,109 +15,47 @@ Version 0.01
 
 our $VERSION = '0.01';
 
-use Attribute::Handlers;
+use sigtrap;
 
-my %TESTS     = ();
-
-sub UNIVERSAL::Test : ATTR(CODE) {
-  my ($package, $symbol, $referent, $attr, $data, $phase, $filename, $linenum) = @_;
-
-  my $method = *{$symbol}{NAME};
-  my $full_name = $package . "::" . $method;
-    
-  $TESTS{$full_name} = TestMetaData->new({
-    has_new                => $package->can('new') ? 1 : 0,
-    has_set_up             => $package->can('set_up') ? 1 : 0,
-    has_tear_down          => $package->can('set_up') ? 1 : 0,
-    package_name           => $package, 
-    method                 => $method,
-    cannonical_method_name => $full_name,
-    filename               => $filename
-  });
-            
-}
+use Ok::Test;
+use Ok::Test::Result;
+use Ok::Test::Error;
+use Ok::Test::ErrorType;
+use Ok::Test::StandardListener;
 
 sub new {
   my ($class, $args) = @_;
   
-  my $self = bless {}, shift;
+  my $self = bless {listeners => []}, shift;
   
-  if(exists($args->{listener})) {
-    my $l = $args->{listener};
-    $self->_add_before_listener($l);
-    $self->_add_pass_listener($l);
-    $self->_add_fail_listener($l);
-    $self->_add_error_listener($l);
-    $self->_add_tests_run_listener($l);
-  }
-
-  $self->add_before_listener($args->{before_listener}) if exists($args->{before_listener});
-  $self->add_pass_listener($args->{pass_listener}) if exists($args->{pass_listener});
-  $self->add_fail_listener($args->{fail_listener}) if exists($args->{fail_listener});
-  $self->add_error_listener($args->{error_listener}) if exists($args->{error_listener});
-  $self->add_error_listener($args->{tests_run_listener}) if exists($args->{tests_run_listener});
+  my $listeners = $args->{listeners};
+  if($listeners) {
+    $self->_add_listener($_) for (@$listeners);
+  } 
   
-  $self->set_default_listener if $self->_no_listeners_set;
+  $self->_add_listener($args->{listener});    
+  
   return $self;
 }
 
-sub add_before_listener { shift->__add_listener(@_, 'before') }
-sub add_pass_listener { shift->__add_listener(@_, 'pass') }
-sub add_fail_listener { shift->__add_listener(@_, 'fail') }
-sub add_error_listener { shift->__add_listener(@_, 'error') }
-sub add_tests_run_listener { shift->__add_listener(@_, 'tests_run') }
 
-sub __add_listener {
-  my ($self, $listener, $type) = @_;
+sub _add_listener {
+  my ($self, $listener) = @_;
   
-  my $prop = $type . "_listeners";
-  my $meth = 'on_' . $type;
-
-  $self->{$prop} = [] unless $self->{$prop};
-  if($listener->can($meth)) {
-    push(@{$self->{$prop}}, $listener);
-  }
+  return unless $listener;
+  
+  push(@{$self->{listeners}}, $listener);
 }
 
-sub _listeners {
-  my ($self, $type) = @_;
-  
-  my $prop = $type . "_listeners";
-  $self->{$prop} = [] unless $self->{$prop};
-  
-  my @listeners = @{$self->{$prop}};
-  return @listeners; 
-}
-
-sub _before_listeners { shift->_listeners('before') }
-sub _pass_listeners { shift->_listeners('pass') }
-sub _error_listeners { shift->_listeners('error') }
-sub _fail_listeners { shift->_listeners('fail') }
-sub _tests_run_listeners { shift->_listeners('tests_run') }
-
-sub _no_listeners_set {
-  my $self = shift;
-  
-  return !scalar($self->_before_listeners, $self->_pass_listeners, $self->_error_listeners, $self->_fail_listeners, $self->_tests_run_listeners);
-}
-
-sub set_default_listener {
-  my $self = shift;
-  
-  my $l = Ok::Test::StandardListener->new;
-  $self->add_before_listener($l);
-  $self->add_pass_listener($l);
-  $self->add_fail_listener($l);
-  $self->add_error_listener($l);
-  $self->add_tests_run_listener($l);
-}
+sub _listeners { @{shift->{listeners}} } 
 
 sub _run_test {
   my ($self, $test_data) = @_;
   
   return if $test_data->has_run;
-  
-  $_->on_before($test_data) for($self->_before_listeners);
+  for my $l ($self->_listeners) {
+    $l->on_before($test_data) if $l->can('on_before');
+  } 
 
   my $obj = $self->_construct_test_object($test_data);
   return unless $obj;
@@ -147,8 +85,12 @@ sub _handle_constructor_error {
   my ($self, $test_data, $error) = @_;
   
   $error = "Nothing returned from constructor\n" unless $error;
-  $test_data->set_result(Ok::Test::Error::SetUp->new($error));
-  $_->on_error($test_data) for ($self->_error_listeners);
+  $test_data->set_error(Ok::Test::Error->new($error, Ok::Test::ErrorType->CONSTRUCTOR));
+  $test_data->set_result(Ok::Test::Result->ERROR);
+
+  for my $l ($self->_listeners) {
+    $l->on_error($test_data) if $l->can('on_error');
+  }
 }
 
 sub _do_set_up {
@@ -167,8 +109,12 @@ sub _do_set_up {
 sub _handle_set_up_error {
   my ($self, $test_data, $error) = @_;
   
-  $test_data->set_result(Ok::Test::Error::SetUp->new($error));
-  $_->on_error($test_data) for ($self->_error_listeners);
+  $test_data->set_error(Ok::Test::Error->new($error, Ok::Test::ErrorType->SET_UP));
+  $test_data->set_result(Ok::Test::Result->ERROR);
+  
+  for my $l ($self->_listeners) {
+    $l->on_error($test_data) if $l->can('on_error');
+  }
 }
 
 sub _execute_test {
@@ -187,22 +133,32 @@ sub _execute_test {
 sub _handle_pass {
   my ($self, $test_data) = @_;
   
-  $test_data->set_result(Ok::Test::Pass->new);
-  $_->on_pass($test_data) for ($self->_pass_listeners());
+  $test_data->set_result(Ok::Test::Result->PASS);
+  for my $l ($self->_listeners) {
+    $l->on_pass($test_data) if $l->can('on_pass');
+  }
 }
 
 sub _handle_fail {
   my ($self, $test_data, $exception) = @_;
   
-  $test_data->set_result(Ok::Test::Fail->new($exception));
-  $_->on_fail($test_data) for ($self->_fail_listeners());
+  $test_data->set_error($exception);
+  $test_data->set_result(Ok::Test::Result->FAIL);
+  
+  for my $l ($self->_listeners) {
+    $l->on_fail($test_data) if $l->can('on_fail');
+  }
 }
 
 sub _handle_execution_error {
   my ($self, $test_data, $error) = @_;
   
-  $test_data->set_result(Ok::Test::Error::Execution->new($error));
-  $_->on_error($test_data) for ($self->_error_listeners());
+  $test_data->set_error(Ok::Test::Error->new($error, Ok::Test::ErrorType->EXECUTION));
+  $test_data->set_result(Ok::Test::Result->ERROR);
+  
+  for my $l ($self->_listeners) {
+    $l->on_error($test_data) if $l->can('on_error');
+  }
 }
 
 sub _do_tear_down {
@@ -214,134 +170,26 @@ sub _do_tear_down {
 
 sub run {
   my $self = shift;
+  sigtrap->import( qw/die normal-signals/ );
+  sigtrap->import( qw/die error-signals/ );
     
   my @tests = $self->_get_runnable_tests();
   $self->_run_test($_) for (@tests);
   
-  $_->on_tests_run([@tests]) for ($self->_tests_run_listeners);
-}
-
-sub _get_all_tests {
-  my  %tests = %TESTS;
-  return %tests;
+  for my $l ($self->_listeners) {
+    $l->on_after([@tests]) if $l->can('on_after');
+  }
 }
 
 sub _get_runnable_tests {
   my $self = shift;
   
-  my %test_meta = _get_all_tests;
+  my %test_meta = Ok::Test::get_loaded_tests();
   my @return_list = ();
   for my $test_data (values(%test_meta)) {
     push(@return_list, $test_data) unless $test_data->has_run;
   }
   return @return_list;
-}
-
-
-package TestMetaData;
-  
-sub new {
-  my ($class, $args) = @_;
-  $args->{has_run} = 0;
-  bless $args, shift;
-}
-
-sub has_new { shift->{has_new}; }
-sub has_set_up { shift->{has_set_up} }
-sub has_tear_down { shift->{has_tear_down} }
-sub package_name { shift->{package_name} }
-sub method { shift->{method} }
-sub cannonical_method_name { shift->{cannonical_method_name} }
-sub filename { shift->{filename} }
-sub has_run { shift->{has_run} }
-sub result { shift->{result} }
-
-sub set_result {
-  my ($self, $result) = @_;
-  
-  $self->{result} = $result;
-  $self->{has_run} = 1;  
-}
-
-package Ok::Test::Error;
-
-sub new { 
-  my ($class, $origin_exception, $type) = @_;
-  bless { origin => $origin_exception, type => $type }, $class;
-}
-
-sub origin_exception { shift->{origin} }
-sub type { shift->{type} }
-
-package Ok::Test::Error::Constructor;
-
-use base 'Ok::Test::Error';
-
-sub new { shift->SUPER::new(@_, 'Constuctor') } 
-
-package Ok::Test::Error::SetUp;
-use base 'Ok::Test::Error';
-
-sub new { shift->SUPER::new(@_, 'SetUp') } 
-
-
-package Ok::Test::Error::Execution;
-use base 'Ok::Test::Error';
-
-sub new { shift->SUPER::new(@_, 'Execution') } 
-
-package Ok::Test::Fail;
-
-sub new {
-  my ($class, $exception) = @_;
-  
-  bless {exception => $exception}, $class; 
-}
-
-sub exception { shift->{exception} }
-
-package Ok::Test::Pass;
-
-sub new { bless {}, shift }
-
-package Ok::Test::StandardListener;
-
-sub new { bless {}, shift }
-
-sub on_before {my $s = shift; print STDOUT shift->cannonical_method_name }
- 
-sub on_pass {my $s = shift;  print STDOUT  "." }
-
-sub on_fail {my $s = shift; print STDOUT "F" }
-
-sub on_error {my $s = shift; print STDOUT "E" }
-
-sub on_tests_run { 
-  my ($self, $test_list) = @_;
-  
-  my @passes  = grep { $_->result->isa('Ok::Test::Pass') } @$test_list;
-  my @fails   = grep { $_->result->isa('Ok::Test::Fail') } @$test_list;
-  my @errors  = grep { $_->result->isa('Ok::Test::Error') } @$test_list;
- 
-  my ($test_count, $pass_count, $fail_count, $error_count) = (scalar(@$test_list), scalar(@passes), scalar(@fails), scalar(@errors));
-  
-  print STDOUT "\nPassed $test_count of " . scalar(@$test_list) . " tests\n";
-  print STDOUT "There were $fail_count failures.\n" if $fail_count > 1;
-  print STDOUT "There was 1 failure.\n" if $fail_count == 1;
-  for(my $i = 0; $i < $fail_count; $i++) {
-    print STDOUT ($i+1) . ") " . $fails[$i]->cannonical_method_name . "\n";
-    print STDOUT "\t'" . ($fails[$i]->result->exception->message or $fails[$i]->result->exception->reason) . "'";
-  }
-  print STDOUT "There were $error_count errors.\n" if $error_count > 1;
-  for(my $i = 0; $i < $error_count; $i++) {
-    print STDOUT ($i+1) . ") " . $errors[$i]->cannonical_method_name . "\n";
-    print STDOUT "\t" . $errors[$i]->result->origin_exception . "\n";
-  }
-  print STDOUT "There was 1 error.\n" if $error_count == 0;
-  
-  
-  
-  
 }
 
 =head1 AUTHOR

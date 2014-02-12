@@ -54,7 +54,7 @@ sub set_up {
   die "set_up to die";
 }
 
-sub dies_in_set_up : Test;
+sub dies_in_set_up : Test {}
 
-Ok::Test::run_tests();
 
+1

@@ -15,9 +15,6 @@ Version 0.01
 
 our $VERSION = '0.01';
 
-use Ok::Test::Runner;
-use sigtrap;
-
 =head1 SYNOPSIS
 
 Contains the Annotation handler and static functions for running tests.
@@ -60,14 +57,31 @@ Before if a set_up method exists it will be called before the test and consequen
 =head2 function1
 
 =cut
+use Attribute::Handlers;
+use Ok::Test::Meta;
 
-sub run_tests {
-  
-  sigtrap->import( qw/die normal-signals/ );
-  sigtrap->import( qw/die error-signals/ );
-  
-  my $runner = Ok::Test::Runner->new();
-  $runner->run();
+my %TESTS     = ();
+
+sub UNIVERSAL::Test : ATTR(CODE) {
+  my ($package, $symbol, $referent, $attr, $data, $phase, $filename, $linenum) = @_;
+
+  my $method = *{$symbol}{NAME};
+  my $full_name = $package . "::" . $method;
+    
+  $TESTS{$full_name} = Ok::Test::Meta->new({
+    has_new                => $package->can('new') ? 1 : 0,
+    has_set_up             => $package->can('set_up') ? 1 : 0,
+    has_tear_down          => $package->can('set_up') ? 1 : 0,
+    package_name           => $package, 
+    method                 => $method,
+    cannonical_method_name => $full_name,
+    filename               => $filename
+  });
+}
+
+sub get_loaded_tests {
+  my  %tests = %TESTS;
+  return %tests;
 }
 
 1; # End of Ok::Test

@@ -1,9 +1,17 @@
 use 5.006;
 use strict;
 use warnings FATAL => 'all';
-use Test::More;
+#use Test::More;
+#
+#plan tests => 3;
+use FindBin;
+use lib $FindBin::Bin;
 
-plan tests => 3;
+use Ok::Test::Runner;
+use Ok::SampleTest;
 
-use Ok::Test;
+my $runner = new Ok::Test::Runner({listener => Ok::Test::StandardListener->new});
+
+$runner->run;
+
 
