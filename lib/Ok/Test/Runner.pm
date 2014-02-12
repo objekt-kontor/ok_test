@@ -26,7 +26,7 @@ use Ok::Test::StandardListener;
 sub new {
   my ($class, $args) = @_;
   
-  my $self = bless {listeners => []}, shift;
+  my $self = bless {listeners => [], filter => undef}, shift;
   
   my $listeners = $args->{listeners};
   if($listeners) {
@@ -34,10 +34,9 @@ sub new {
   } 
   
   $self->_add_listener($args->{listener});    
-  
+  $self->_add_filter($args->{filter});
   return $self;
 }
-
 
 sub _add_listener {
   my ($self, $listener) = @_;
@@ -48,6 +47,14 @@ sub _add_listener {
 }
 
 sub _listeners { @{shift->{listeners}} } 
+
+sub _add_filter {
+  my ($self, $filter) = @_;
+  
+  $self->{filter} = $filter; 
+}
+
+sub _filter { shift->{filter} }
 
 sub _run_test {
   my ($self, $test_data) = @_;
@@ -84,7 +91,7 @@ sub _construct_test_object {
 sub _handle_constructor_error {
   my ($self, $test_data, $error) = @_;
   
-  $error = "Nothing returned from constructor\n" unless $error;
+  $error = "Nothing returned from constructor.\n" unless $error;
   $test_data->set_error(Ok::Test::Error->new($error, Ok::Test::ErrorType->CONSTRUCTOR));
   $test_data->set_result(Ok::Test::Result->ERROR);
 
@@ -188,6 +195,10 @@ sub _get_runnable_tests {
   my @return_list = ();
   for my $test_data (values(%test_meta)) {
     push(@return_list, $test_data) unless $test_data->has_run;
+  }
+  if( $self->{filter} ) {
+    my @tmp_list = grep { $self->_filter->should_run($_) } @return_list;
+    @return_list = @tmp_list;
   }
   return @return_list;
 }

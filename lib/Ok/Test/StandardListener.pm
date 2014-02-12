@@ -29,14 +29,17 @@ sub on_after {
   print STDOUT "\nThere was 1 failure.\n" if $fail_count == 1;
   for(my $i = 0; $i < $fail_count; $i++) {
     my $e = $fails[$i]->error;
+    
     print STDOUT ($i+1) . ") " . $fails[$i]->cannonical_method_name . "\n";
-    print STDOUT "\t'" . ($fails[$i]->error->message or $fails[$i]->error->reason) . "'";
+    print STDOUT "\t'" . ($e->message or $e->reason) . "' at " . $e->file . " line " . $e->line . ".";
   }
   print STDOUT "\n\nThere were $error_count errors.\n" if $error_count > 1;
-  print STDOUT "There was 1 error.\n" if $error_count == 0; 
+  print STDOUT "There was 1 error.\n" if $error_count == 1; 
   for(my $i = 0; $i < $error_count; $i++) {
-    print STDOUT ($i+1) . ") " . $errors[$i]->cannonical_method_name . " (" . $errors[$i]->error->type->name . " error)\n";
-    print STDOUT "\t" . $errors[$i]->error->origin_exception . "\n";
+    my $msg = $errors[$i]->error->origin_exception . "";
+    $msg =~ s/(\S)\s*$/$1.\n/ unless $msg =~ /\.$/;
+    my $str =  ($i+1) . ") " . $errors[$i]->cannonical_method_name . " (" . $errors[$i]->error->type->name . " error)\n\t$msg\n";
+   print STDOUT $str;
   }
   
 } 

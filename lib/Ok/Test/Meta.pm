@@ -20,7 +20,7 @@ sub filename { shift->{filename} }
 sub has_run { shift->{has_run} }
 sub result { shift->{result} }
 sub error { shift->{error} }
-
+sub arguments { shift->{arguments} }
 
 sub set_result {
   my ($self, $result) = @_;

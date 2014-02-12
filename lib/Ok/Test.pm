@@ -67,7 +67,6 @@ sub UNIVERSAL::Test : ATTR(CODE) {
 
   my $method = *{$symbol}{NAME};
   my $full_name = $package . "::" . $method;
-    
   $TESTS{$full_name} = Ok::Test::Meta->new({
     has_new                => $package->can('new') ? 1 : 0,
     has_set_up             => $package->can('set_up') ? 1 : 0,
@@ -75,9 +74,11 @@ sub UNIVERSAL::Test : ATTR(CODE) {
     package_name           => $package, 
     method                 => $method,
     cannonical_method_name => $full_name,
-    filename               => $filename
+    filename               => $filename,
+    arguments              => $data,
   });
 }
+
 
 sub get_loaded_tests {
   my  %tests = %TESTS;

@@ -20,7 +20,7 @@ sub pass : Test {
   assert_true(1, "a message");
 }
 
-sub error : Test {
+sub error : Test({ type => 'Unit', method => 'blah'}) {
   die "random error";
 }
 
