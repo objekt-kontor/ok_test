@@ -7,10 +7,10 @@ use warnings FATAL => 'all';
 use FindBin;
 use lib $FindBin::Bin;
 use lib "$FindBin::Bin/../lib";
-use Devel::Cover;
+#use Devel::Cover;
 use Ok::Test::Runner;
-use Ok::SampleTest;
-use Tmp::TempClass;
+#use Ok::SampleTest;
+require 'Tmp/TempClass.pm';
 
 #my %tests = Ok::Test::get_loaded_tests();
 #my $t = $tests{'Ok::SampleTest::error'};
@@ -28,6 +28,7 @@ sub new { bless {}, __PACKAGE__ }
 sub should_run {
   my ($self, $test_meta) = @_;
   
+  return 1;
   return $test_meta->filename =~ /t\/Ok\//;
   return 0 unless $test_meta->arguments;
   return 1 if $test_meta->arguments->[0] eq 'Unit';

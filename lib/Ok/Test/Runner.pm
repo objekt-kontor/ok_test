@@ -191,9 +191,24 @@ sub run {
 sub _get_runnable_tests {
   my $self = shift;
   
-  my %test_meta = Ok::Test::get_loaded_tests();
+  my @test_meta = Ok::Test::get_loaded_tests();
   my @return_list = ();
-  for my $test_data (values(%test_meta)) {
+  for my $test_data (@test_meta) {
+    if($test_data->method eq '') {
+      my $package = $test_data->package_name;
+      my @keys = eval "keys( %${package}::)";
+      for my $k (@keys) { 
+        {
+          no strict 'refs';
+          require B;
+          my $gv = B::svref_2object(\*{"${package}::${k}" });
+          next unless $gv->FILE eq $test_data->filename;
+          next unless $gv->LINE == $test_data->line;
+          $test_data->{method} = $gv->NAME;
+          $test_data->{cannonical_method_name} = $package . "::" . $gv->NAME;
+        }
+      } 
+    }
     push(@return_list, $test_data) unless $test_data->has_run;
   }
   if( $self->{filter} ) {

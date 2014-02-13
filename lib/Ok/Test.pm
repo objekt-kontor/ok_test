@@ -60,14 +60,14 @@ Before if a set_up method exists it will be called before the test and consequen
 use Attribute::Handlers;
 use Ok::Test::Meta;
 
-my %TESTS     = ();
-
-sub UNIVERSAL::Test : ATTR(CODE) {
+my @TESTS     = ();
+use YAML;
+sub UNIVERSAL::Test:ATTR(CODE) {
   my ($package, $symbol, $referent, $attr, $data, $phase, $filename, $linenum) = @_;
-
-  my $method = *{$symbol}{NAME};
+  my $method = '';
+  $method = *{$symbol}{NAME} if ref($symbol);
   my $full_name = $package . "::" . $method;
-  $TESTS{$full_name} = Ok::Test::Meta->new({
+  push(@TESTS, Ok::Test::Meta->new({
     has_new                => $package->can('new') ? 1 : 0,
     has_set_up             => $package->can('set_up') ? 1 : 0,
     has_tear_down          => $package->can('set_up') ? 1 : 0,
@@ -76,13 +76,14 @@ sub UNIVERSAL::Test : ATTR(CODE) {
     cannonical_method_name => $full_name,
     filename               => $filename,
     arguments              => $data,
-  });
+    line                   => $linenum
+  }));
 }
 
 
 sub get_loaded_tests {
-  my  %tests = %TESTS;
-  return %tests;
+  my  @tests = @TESTS;
+  return @tests;
 }
 
 1; # End of Ok::Test

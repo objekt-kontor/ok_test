@@ -21,6 +21,7 @@ sub has_run { shift->{has_run} }
 sub result { shift->{result} }
 sub error { shift->{error} }
 sub arguments { shift->{arguments} }
+sub line { shift->{line} }
 
 sub set_result {
   my ($self, $result) = @_;
