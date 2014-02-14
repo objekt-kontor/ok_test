@@ -1,8 +1,11 @@
 package Ok::SampleTest;
 
-use Ok::Test;
 
 use Test::Assert ':assert';
+
+use Ok::Test;
+
+use Attribute::Handlers;
 
 sub new {
   my $class = shift;

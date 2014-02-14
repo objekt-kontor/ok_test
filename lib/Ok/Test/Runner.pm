@@ -21,7 +21,12 @@ use Ok::Test;
 use Ok::Test::Result;
 use Ok::Test::Error;
 use Ok::Test::ErrorType;
-use Ok::Test::StandardListener;
+
+use File::Find;
+
+use Exporter qw(import);
+
+our @EXPORT_OK = qw(load_tests);
 
 sub new {
   my ($class, $args) = @_;
@@ -186,6 +191,11 @@ sub run {
   for my $l ($self->_listeners) {
     $l->on_after([@tests]) if $l->can('on_after');
   }
+}
+
+sub load_tests {
+
+  find( sub { eval "require '" . $File::Find::name . "'" if $_ =~ /\.pm/ }, shift);
 }
 
 sub _get_runnable_tests {

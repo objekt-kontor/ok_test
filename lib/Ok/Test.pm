@@ -61,12 +61,15 @@ use Attribute::Handlers;
 use Ok::Test::Meta;
 
 my @TESTS     = ();
-use YAML;
+
 sub UNIVERSAL::Test:ATTR(CODE) {
   my ($package, $symbol, $referent, $attr, $data, $phase, $filename, $linenum) = @_;
   my $method = '';
+  
+
   $method = *{$symbol}{NAME} if ref($symbol);
   my $full_name = $package . "::" . $method;
+
   push(@TESTS, Ok::Test::Meta->new({
     has_new                => $package->can('new') ? 1 : 0,
     has_set_up             => $package->can('set_up') ? 1 : 0,
